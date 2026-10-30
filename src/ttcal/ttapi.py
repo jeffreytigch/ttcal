@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from typing import Any
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 
 class TimeTaggerError(Exception):
@@ -38,6 +40,21 @@ class TimeTaggerClient:
         self._password = password
         self.session = requests.Session()
         self.session.headers["User-Agent"] = "ttcal"
+        # uvicorn closes idle keep-alive connections; without a retry a single
+        # stale socket would abort a whole pass. PUT /records is idempotent by
+        # record key, so retrying it is safe.
+        retry = Retry(
+            total=3,
+            connect=3,
+            read=3,
+            status=0,
+            backoff_factor=0.5,
+            allowed_methods=None,
+            raise_on_status=False,
+        )
+        adapter = HTTPAdapter(max_retries=retry)
+        self.session.mount("http://", adapter)
+        self.session.mount("https://", adapter)
         if token:
             self.session.headers["authtoken"] = token
         else:

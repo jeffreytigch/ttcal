@@ -332,6 +332,33 @@ Local verification: `uv run pytest -q` → **76 passed**; `uv run pytest -q -m "
 
 ---
 
+## Local supervised-service evidence (2026-10-30)
+
+The deployment path was exercised locally with the same supervisor arrangement
+the documentation describes: `supervisord` from PyPI, the documented
+`[program:ttcal]` block (`command = ... -m ttcal -c ... run`, `stopsignal=TERM`,
+`autorestart=true`), a 5-second poll interval, against the Docker dev stack.
+
+- `supervisorctl status` → `RUNNING`; the first pass completed and logged its
+  summary.
+- `supervisorctl stop` → the process handled SIGTERM after the running pass and
+  logged `received signal 15, stopping after this pass` / `stopped`; the next
+  start was clean.
+- `kill -9` on the child → supervisord restarted it automatically; status showed
+  a new pid `RUNNING` within `startsecs`.
+- **Downtime catch-up**: with the service stopped, a Record was created through
+  the TimeTagger API; after starting the service exactly one Event with the
+  correct bounds appeared. Hiding the Record removed the Event again.
+- `ttcal status` reported pair counts, last-sync age, both cursors, the recorded
+  conflict and the skipped Events, matching the format documented in
+  `docs/usage.md`.
+
+This covers the parts of the deployment criterion that do not need the owner's
+host. The live deployment, the checks in `docs/acceptance.md` and the Apple
+Duplicate UID confirmation remain with the owner.
+
+---
+
 ## Phase 5 readiness (2026-10-30)
 
 Deployment was handed to the owner by explicit instruction ("Don't connect to

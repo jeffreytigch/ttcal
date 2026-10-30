@@ -777,6 +777,7 @@ source = { editable = "." }
 dependencies = [
     { name = "caldav" },
     { name = "requests" },
+    { name = "urllib3" },
     { name = "vobject" },
 ]
 
@@ -792,6 +793,7 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "requests", specifier = ">=2.31" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },
+    { name = "urllib3", specifier = ">=1.26" },
     { name = "vobject", specifier = ">=0.9.6" },
 ]
 provides-extras = ["dev"]
