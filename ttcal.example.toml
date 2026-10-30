@@ -1,0 +1,54 @@
+# ttcal configuration.
+#
+# Copy this file to ~/.config/ttcal/ttcal.toml and edit it.
+# If the file contains inline secrets (token, password) it must be private:
+#
+#     chmod 600 ~/.config/ttcal/ttcal.toml
+#
+# Every value below can also be supplied through a *_file reference, which is
+# the better choice when the secret lives in a password store or a mounted
+# secret. Relative paths are resolved against the directory of this file.
+
+[timetagger]
+# Base URL of the TimeTagger API, including /api/v2.
+# A self-hosted instance usually serves the app under /timetagger/.
+api_url = "https://timetagger.example.com/timetagger/api/v2"
+
+# Recommended: a personal API token from the TimeTagger web app
+# (menu → "API tokens"). Send it in the `authtoken` header.
+token = "your-api-token"
+# token_file = "~/.config/ttcal/timetagger-token"
+
+# Alternative to a token: username and password. ttcal logs in through
+# /bootstrap_authentication and keeps the resulting JWT in memory.
+# username = "your-username"
+# password = "your-password"
+# password_file = "~/.config/ttcal/timetagger-password"
+
+
+[caldav]
+# Base URL of the CalDAV server. Radicale serves at the root by default.
+url = "https://calendar.example.com/"
+username = "your-caldav-user"
+password = "your-caldav-password"
+# password_file = "~/.config/ttcal/caldav-password"
+
+# Display name of the calendar to mirror. It is created on first sync.
+# Use one dedicated calendar; ttcal never moves events between calendars.
+calendar = "TimeTagger"
+
+
+[ttcal]
+# SQLite file holding pairs, cursors, conflicts and skipped events.
+# Relative paths are resolved against the directory of this file.
+state_db = "ttcal.db"
+
+# How many days back the first sync looks. 0 means "start from now": only
+# records changed after the first pass are mirrored.
+backfill_days = 90
+
+# Seconds between two sync passes. Minimum 5.
+poll_interval = 60
+
+# DEBUG, INFO, WARNING or ERROR.
+log_level = "INFO"

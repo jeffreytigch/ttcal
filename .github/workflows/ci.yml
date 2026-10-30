@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    name: unit (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - name: Install
+        run: uv sync --extra dev
+      - name: Lint
+        run: |
+          uv run ruff check src tests
+          uv run ruff format --check src tests
+      - name: Unit tests
+        run: uv run pytest -q -m "not docker"
+      - name: Build package
+        run: uv build
+
+  integration:
+    name: docker integration
+    runs-on: ubuntu-latest
+    services:
+      timetagger:
+        image: ghcr.io/almarklein/timetagger:latest
+        env:
+          TIMETAGGER_BIND: 0.0.0.0:80
+          TIMETAGGER_DATADIR: /tmp/_timetagger
+          TIMETAGGER_LOG_LEVEL: info
+          # test:test, bcrypt
+          TIMETAGGER_CREDENTIALS: "test:$2a$08$0CD1NFiIbancwWsu3se1v.RNR/b7YeZd71yg3cZ/3whGlyU6Iny5i"
+        ports:
+          - 1081:80
+      radicale:
+        image: tomsquest/docker-radicale:latest
+        env:
+          # Any credentials are accepted; the tests send test:test.
+          RADICALE_CONFIG_AUTH_TYPE: none
+          RADICALE_CONFIG_STORAGE_FILESYSTEM_FOLDER: /data/collections
+        ports:
+          - 5232:5232
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - name: Install
+        run: uv sync --extra dev
+      - name: Wait for the stack
+        run: |
+          uv run python - <<'PY'
+          import sys, time
+          import requests
+
+          urls = [
+              "http://localhost:1081/timetagger/api/v2/version",
+              "http://localhost:5232/",
+          ]
+          for _ in range(60):
+              try:
+                  if all(
+                      requests.get(url, timeout=2, auth=("test", "test")).status_code < 500
+                      for url in urls
+                  ):
+                      sys.exit(0)
+              except requests.RequestException:
+                  pass
+              time.sleep(2)
+          sys.exit("dev stack did not start")
+          PY
+      - name: Integration tests
+        env:
+          TTCAL_TEST_REQUIRE_STACK: "1"
+          TTCAL_TEST_TT_URL: http://localhost:1081/timetagger/api/v2
+          TTCAL_TEST_CALDAV_URL: http://localhost:5232/
+        run: uv run pytest -q -m docker -rs

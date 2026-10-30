@@ -1,0 +1,16 @@
+.git
+.gitignore
+.venv
+.pytest_cache
+__pycache__
+**/__pycache__
+*.py[cod]
+*.db
+*.db-wal
+*.db-shm
+dev
+tests
+docs
+Makefile
+ttcal.toml
+ttcal.example.toml
