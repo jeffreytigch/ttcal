@@ -201,9 +201,13 @@ def parse_event(raw: str) -> ParsedEvent:
     if not uid or not str(uid).strip():
         raise UnsupportedEvent("no-uid", "event has no UID")
 
-    for name in ("rrule", "rdate", "exdate"):
+    for name in ("rrule", "rdate", "exdate", "recurrence-id"):
         if getattr(vevent, name, None) is not None:
             raise UnsupportedEvent("recurring", f"event has {name.upper()}")
+
+    status = _prop_value(vevent, "status")
+    if status is not None and str(status).strip().upper() == "CANCELLED":
+        raise UnsupportedEvent("cancelled", "event is marked CANCELLED")
 
     dtstart = _prop_value(vevent, "dtstart")
     if dtstart is None:

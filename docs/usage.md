@@ -98,15 +98,16 @@ Some events cannot be represented as a record:
 | Reason | Why |
 |--------|-----|
 | `all-day` | A record has instants, not a date. |
-| `recurring` | Recurrence is not expanded (see below). |
+| `recurring` | Recurrence is not expanded (see below), including single occurrences of a series. |
 | `no-uid` | Without a UID there is no stable identity to pair. |
 | `empty-summary` | The event has no title, so there is nothing to record. |
 | `hidden-prefix` | The title starts with `HIDDEN` and would collide with TimeTagger's deletion marker. |
+| `cancelled` | The event is marked `STATUS:CANCELLED`; clients normally delete instead. |
 | `invalid-ical`, `multi-event`, `no-dtstart` | The payload is not exactly one timed event with a start. |
 
 Skipped events are never modified and are listed by `ttcal status`, with the
 href and reason. Fix the event (give it a time, remove the recurrence, give it a
-title) and the next pass picks it up.
+title, remove `STATUS:CANCELLED`) and the next pass picks it up.
 
 ### Recurring events
 

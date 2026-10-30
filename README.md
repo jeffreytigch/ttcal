@@ -143,8 +143,8 @@ These follow from the 1:1 design and are documented rather than fixed:
 - [Troubleshooting](docs/troubleshooting.md) — symptoms and fixes.
 - [Uberspace deployment example](docs/deploy-uberspace.md) — one complete,
   optional walkthrough.
-- [Acceptance checklist](docs/acceptance.md) — the ten checks to run after
-  deploying.
+- [Acceptance checklist](docs/acceptance.md) — nine required checks plus one
+  optional Apple Calendar check, to run after deploying.
 - [Design and decisions](docs/plan.md), [glossary](CONTEXT.md),
   [architecture decisions](docs/adr/).
 
@@ -153,7 +153,7 @@ These follow from the 1:1 design and are documented rather than fixed:
 ```bash
 make dev-up      # TimeTagger on :1081, Radicale on :5232 (test:test)
 uv sync --extra dev
-uv run pytest -q             # 55 unit tests + 21 Docker integration tests
+uv run pytest -q             # 57 unit tests + 21 Docker integration tests
 uv run pytest -q -m "not docker"
 make dev-down
 ```

@@ -198,6 +198,36 @@ class ParseEventTests(unittest.TestCase):
             model.parse_event(raw)
         self.assertEqual(ctx.exception.reason, "recurring")
 
+    def test_recurrence_override_is_unsupported(self):
+        raw = ical(
+            "BEGIN:VEVENT",
+            "UID:a",
+            "DTSTAMP:20231114T220000Z",
+            "DTSTART:20231114T220000Z",
+            "DTEND:20231114T230000Z",
+            "RECURRENCE-ID:20231114T220000Z",
+            "SUMMARY:x",
+            "END:VEVENT",
+        )
+        with self.assertRaises(model.UnsupportedEvent) as ctx:
+            model.parse_event(raw)
+        self.assertEqual(ctx.exception.reason, "recurring")
+
+    def test_cancelled_event_is_unsupported(self):
+        raw = ical(
+            "BEGIN:VEVENT",
+            "UID:a",
+            "DTSTAMP:20231114T220000Z",
+            "DTSTART:20231114T220000Z",
+            "DTEND:20231114T230000Z",
+            "STATUS:CANCELLED",
+            "SUMMARY:x",
+            "END:VEVENT",
+        )
+        with self.assertRaises(model.UnsupportedEvent) as ctx:
+            model.parse_event(raw)
+        self.assertEqual(ctx.exception.reason, "cancelled")
+
     def test_event_without_uid_is_unsupported(self):
         raw = ical(
             "BEGIN:VEVENT",

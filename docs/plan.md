@@ -264,8 +264,11 @@ Verification (acceptance checklist):
 
 - **License**: owner to choose; MIT proposed.
 - **Repo name/package name**: `ttcal` assumed.
-- **Apple duplicate UID**: resolved in Phase 0; fallback already specified.
-- **Whether Radicale's sync-token is exposed through `caldav`**: verify in Phase 1; ETag fallback specified.
+- **Apple duplicate UID**: not observable headlessly; the bridge mints every
+  UID, so an Apple duplicate arrives as a new Event and cannot collide. Optional
+  confirmation is acceptance check 10.
+- **Radicale sync-token**: verified in Phase 1 (`http://radicale.org/ns/sync/...`);
+  expired and `fake-` tokens fall back to a full listing.
 - **Timezone travel**: UTC storage means historical Events shift when you change timezone, exactly as TimeTagger does. Documented, not fixed.
 
 ## 8. Non-goals
@@ -308,7 +311,7 @@ Verified manually against the Docker stack and covered by the test suite:
 9. **Restore robustness**: restoring an Event first looks for an existing Event with the same UID and adopts it, so a restore interrupted after the calendar write cannot loop on the server's duplicate-UID rejection. A pair without a stored baseline now reports an error instead of inventing a placeholder Record.
 10. **Service behaviour**: `run` treats SIGTERM/SIGINT as "stop after this pass" (supervisord restarts are clean), `run --once` exits non-zero when the pass failed, and a username/password login is renewed once on a 401 so a long-running service survives token expiry.
 
-Test suite: `pytest -q` → **76 passed** (55 unit tests for model, store, config and API client; 21 Docker integration tests). Integration tests use a unique `ttcal-test-<hex>` calendar, a temporary state database and a temporary 0600 config; they are skipped with an actionable message when the dev stack is down and refuse non-local targets unless `TTCAL_TEST_ALLOW_REMOTE=1`. Both directions of every path above are exercised, including dry-run, idempotency, hidden records, running records (including a re-opened timer), future Records, both conflict winners, truncation, skipped Events (including an untitled Event), mass-deletion refusal and its explicit `--allow-mass-deletion` override, expired/fake sync tokens, restore adoption, the missing-calendar refusal and backfill widening.
+Test suite: `pytest -q` → **78 passed** (57 unit tests for model, store, config and API client; 21 Docker integration tests). Integration tests use a unique `ttcal-test-<hex>` calendar, a temporary state database and a temporary 0600 config; they are skipped with an actionable message when the dev stack is down and refuse non-local targets unless `TTCAL_TEST_ALLOW_REMOTE=1`. Both directions of every path above are exercised, including dry-run, idempotency, hidden records, running records (including a re-opened timer), future Records, both conflict winners, truncation, skipped Events (including an untitled Event, a cancelled Event and a recurrence override), mass-deletion refusal and its explicit `--allow-mass-deletion` override, expired/fake sync tokens, restore adoption, the missing-calendar refusal and backfill widening.
 
 ---
 
@@ -328,7 +331,7 @@ Packaging and documentation are in place; every artefact below is in the reposit
 5. **CI**: `.github/workflows/ci.yml` — unit tests on Python 3.11/3.12/3.13 plus a package build; a Docker job with TimeTagger and Radicale service containers, a readiness wait and `TTCAL_TEST_REQUIRE_STACK=1` so a dead stack fails the job instead of skipping silently.
 6. **Test guard**: integration tests now fail instead of skipping when `TTCAL_TEST_REQUIRE_STACK` is set; locally they still skip with `run: make dev-up`.
 
-Local verification: `uv run pytest -q` → **76 passed**; `uv run pytest -q -m "not docker"` → **55 passed**; `uv run ruff check src tests` and `ruff format --check` clean; `docker build` and the container `doctor` run both succeed.
+Local verification: `uv run pytest -q` → **78 passed**; `uv run pytest -q -m "not docker"` → **57 passed**; `uv run ruff check src tests` and `ruff format --check` clean; `docker build` and the container `doctor` run both succeed.
 
 ---
 
