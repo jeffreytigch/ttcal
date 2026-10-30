@@ -33,7 +33,7 @@ The remembered pairing between a Record key and an Event UID after one of the tw
 _Avoid_: mapping, cache, link
 
 **Skipped event**:
-An Event the bridge refuses to mirror because no Record can represent it: all-day events and recurring events. Skipped events are reported, never silently converted.
+An Event the bridge refuses to mirror because no Record can represent it: all-day events, recurring events and single occurrences of a series, cancelled events, events without a UID, invalid events, and events whose title TimeTagger cannot store. Skipped events are reported, never silently converted.
 _Avoid_: ignored event, invalid event
 
 **Conflict**:
