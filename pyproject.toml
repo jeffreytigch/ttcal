@@ -29,7 +29,7 @@ dependencies = [
 
 [project.urls]
 # Replace with the published repository URL when the project goes public.
-Repository = "https://github.com/your-name/ttcal"
+Repository = "https://github.com/jeffreytigch/ttcal"
 
 [project.optional-dependencies]
 dev = [

@@ -23,7 +23,7 @@ TimeTagger or the calendar server.
 ### pipx (recommended for a single user)
 
 ```bash
-git clone https://github.com/your-name/ttcal.git
+git clone https://github.com/jeffreytigch/ttcal.git
 cd ttcal
 pipx install .
 ttcal --version

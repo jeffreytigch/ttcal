@@ -136,7 +136,7 @@ is wrong; a 404/502 means the backend or the Radicale process is not running.
 ## 3. Install ttcal
 
 ```bash
-git clone https://github.com/your-name/ttcal.git ~/ttcal-src
+git clone https://github.com/jeffreytigch/ttcal.git ~/ttcal-src
 python3.14 -m venv ~/ttcal-venv
 ~/ttcal-venv/bin/pip install --upgrade ~/ttcal-src
 ~/ttcal-venv/bin/ttcal --version

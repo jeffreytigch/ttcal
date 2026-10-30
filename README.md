@@ -56,7 +56,7 @@ editing surface without giving up TimeTagger's reports and totals.
 ## Quickstart
 
 ```bash
-git clone https://github.com/your-name/ttcal.git
+git clone https://github.com/jeffreytigch/ttcal.git
 cd ttcal
 
 # install the command (choose one)
