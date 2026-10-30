@@ -123,6 +123,10 @@ Run it under your service manager (see below), then point ttcal's `[caldav]`
 section at it. On first sync ttcal creates the calendar; the client account must
 be allowed to create collections.
 
+`127.0.0.1` is correct when the reverse proxy runs on the same host. If the
+proxy reaches the app over a network interface instead — Uberspace works this
+way — bind `0.0.0.0` (or `::`) and keep the port closed to the outside.
+
 ### Reverse proxy
 
 CalDAV discovery assumes the calendar server lives at the **root of its own
@@ -161,32 +165,32 @@ Calendar does not discover collections reliably there.
 ### Example: Uberspace
 
 Uberspace is one hosting option, not a requirement. The shape is the same as
-above: Radicale listens on localhost, a subdomain proxies to it, and ttcal runs
-as a supervised service.
+above, except that Radicale must listen on the account's network interface, not
+on loopback, because the Uberspace proxy connects from outside `127.0.0.1`.
 
 ```bash
-# Radicale in a virtualenv, listening on localhost
-python3 -m venv ~/radicale-venv
-~/radicale-venv/bin/pip install --upgrade radicale bcrypt passlib
+# Radicale in a virtualenv, listening on the account's interface
+python3.14 -m venv ~/radicale-venv   # any 3.11+ interpreter
+~/radicale-venv/bin/pip install --upgrade radicale bcrypt
 mkdir -p ~/.config/radicale ~/radicale-data/collections
 htpasswd -nbB calendar 'choose-a-password' > ~/.config/radicale/users
 chmod 600 ~/.config/radicale/users
 # then create ~/.config/radicale/config as shown above, but with
-#   hosts = 127.0.0.1:5232
+#   hosts = 0.0.0.0:5232
 #   filesystem_folder = /home/USER/radicale-data/collections
 
 # install ttcal for the account
-pipx install /path/to/ttcal
+python3.14 -m venv ~/ttcal-venv
+~/ttcal-venv/bin/pip install /path/to/ttcal
 
 # expose the calendar on its own subdomain root
 uberspace web domain add cal.example.com
-uberspace web backend set / --http --port 5232 --domain cal.example.com
+uberspace web backend set cal.example.com/ --http --port 5232
 ```
 
-Use `uberspace web backend list` to check which backend serves which domain.
-The exact command syntax varies between Uberspace versions; see the Uberspace
-manual for the version you run. A complete walkthrough, including Radicale and
-ttcal under supervisord, is in
+The backend target is `DOMAIN/PATH`; there is no `--domain` option. Use
+`uberspace web backend list` to confirm it reports `OK, listening`. A complete
+walkthrough, including Radicale and ttcal under supervisord, is in
 [deploy-uberspace.md](deploy-uberspace.md).
 
 ## 5. Run it as a service

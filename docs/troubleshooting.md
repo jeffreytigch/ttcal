@@ -84,6 +84,13 @@ writing, so a normal edit is not affected.
 - TLS errors on a self-signed certificate need a trusted certificate, not a
   bypass: Apple clients reject self-signed CalDAV servers.
 
+### `uberspace web backend list` says `NOT OK, wrong interface`
+
+The reverse proxy cannot reach the process. A listener on `127.0.0.1` or
+`localhost` is invisible to the Uberspace frontend; set `[server] hosts =
+0.0.0.0:5232` (or `::`) in the Radicale config and restart it. `NOT OK, no
+service` means nothing is listening on that port at all.
+
 ### `calendar 'TimeTagger' not found at …`
 
 The first `ttcal sync` creates it, but the account must be allowed to create

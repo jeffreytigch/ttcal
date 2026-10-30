@@ -45,7 +45,7 @@ chmod 600 ~/.config/radicale/users
 
 ```ini
 [server]
-hosts = 127.0.0.1:5232
+hosts = 0.0.0.0:5232
 
 [auth]
 type = htpasswd
@@ -56,8 +56,12 @@ htpasswd_encryption = bcrypt
 filesystem_folder = /home/USER/radicale-data/collections
 ```
 
-Replace `USER` with the account name. Radicale listens on loopback only; the
-web backend below exposes it with HTTPS. Do not expose port 5232 directly.
+Replace `USER` with the account name. **Do not bind Radicale to `127.0.0.1` on
+Uberspace:** the web backend reaches the process over the account's network
+interface, and a loopback-only listener shows up as `NOT OK, wrong interface`
+in `uberspace web backend list`. Every Uberspace account has its own network
+interface, so `0.0.0.0` is not publicly reachable by itself; the backend is the
+only route from the internet. Do not add a firewall opening for 5232.
 
 Supervisord unit `~/etc/services.d/radicale.ini`:
 
@@ -87,19 +91,23 @@ connection error.
 CalDAV discovery expects the server at the **root of its host**. Do not put it
 under a path such as `/caldav/`; Apple Calendar does not discover that reliably.
 TimeTagger may keep its existing path prefix; the calendar needs its own host.
+If you would rather not add a subdomain, you can point the root of the existing
+domain at Radicale (`uberspace web backend set example.com/ --http --port 5232`)
+and leave the more specific `/timetagger` backend in place, because the longest
+matching path wins.
 
 Add the subdomain (DNS must point at Uberspace; the control panel or the manual
 explains the details for the account):
 
 ```bash
 uberspace web domain add cal.example.com
-cd ~/html/cal.example.com
-uberspace web backend set / --http --port 5232
+uberspace web backend set cal.example.com/ --http --port 5232
 uberspace web backend list
 ```
 
-The backend list should show `cal.example.com/` pointing at port `5232`. TLS is
-issued by the host; give it a minute, then check:
+The target is `DOMAIN/PATH`, so the domain comes first; `--domain` is not an
+option. The backend list should show `cal.example.com/` pointing at port `5232`
+with `OK, listening`. TLS is issued by the host; give it a minute, then check:
 
 ```bash
 curl -i -X PROPFIND -u caldav:'choose-a-long-password' \
@@ -249,5 +257,8 @@ to keep the records untouched.
 - The account's cron or watchdog can check liveness with
   `supervisorctl status ttcal`; ttcal itself retries failed passes and does not
   exit on transient network errors.
+- Keep `poll_interval` below 180 seconds (the default is 60). Uberspace closes
+  idle HTTP connections after three minutes; a shorter poll keeps the CalDAV
+  connection warm.
 - Logs live in `~/logs`. `log_level = "DEBUG"` is for diagnosis, not permanent
   use.
