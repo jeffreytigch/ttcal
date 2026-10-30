@@ -105,6 +105,8 @@ def truncate_ds(ds: str, limit: int = DS_MAX) -> str:
 def record_ds_from_summary(summary: str) -> str:
     """Validate and normalize an event summary for use as a record description."""
     ds = normalize_summary(summary)
+    if not ds:
+        raise UnsupportedEvent("empty-summary", "event has no title")
     if is_hidden(ds):
         raise UnsupportedEvent(
             "hidden-prefix",

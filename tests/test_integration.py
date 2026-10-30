@@ -79,6 +79,38 @@ def test_second_sync_is_a_noop(env):
     assert len(events(env)) == 2
 
 
+def test_expired_and_fake_sync_tokens_fall_back_to_full_read(env):
+    start = now() - 3600
+    env.mirror.add_record(start, start + 600, "token test")
+    fsync(env)
+
+    cal = env.mirror.cal
+    cal.calendar = None
+    changes = cal.changes("http://radicale.org/ns/sync/does-not-exist")
+    assert changes.full is True
+    assert changes.sync_token is None  # never persist caldav's fake token
+    assert [event.summary for event in changes.events] == ["token test"]
+
+    cal.calendar = None
+    changes = cal.changes("fake-abc")
+    assert changes.full is True
+    assert [event.summary for event in changes.events] == ["token test"]
+
+
+def test_deletion_is_seen_even_after_a_fake_sync_token(env):
+    start = now() - 3600
+    key = env.mirror.add_record(start, start + 600, "delete me #a")
+    fsync(env)
+    uid = env.mirror.store.pair_for_record(key).uid
+
+    env.mirror.store.set_cursor("caldav_sync_token", "fake-abc")
+    env.mirror.cal.delete_event(uid)
+
+    report = fsync(env)
+    assert report.hidden_records == 1
+    assert env.mirror.record(key)["ds"].startswith("HIDDEN ")
+
+
 def test_hidden_and_running_records_are_not_mirrored(env):
     start = now() - 600
     env.mirror.add_record(start, start + 600, hide_ds("already hidden #a"))
@@ -86,6 +118,55 @@ def test_hidden_and_running_records_are_not_mirrored(env):
     report = fsync(env)
     assert report.created_events == 0
     assert events(env) == {}
+
+
+def test_future_record_far_ahead_is_mirrored(env):
+    start = now() + 30 * 86400
+    key = env.mirror.add_record(start, start + 1800, "planned work #future")
+
+    report = fsync(env)
+    assert report.created_events == 1
+    event = one_event(env)
+    assert (event.start, event.end) == (start, start + 1800)
+    assert env.mirror.store.pair_for_record(key).uid == event.uid
+
+
+def test_record_reopened_as_running_keeps_event(env):
+    start = now() - 3600
+    key = env.mirror.add_record(start, start + 600, "timer #a")
+    fsync(env)
+    uid = env.mirror.store.pair_for_record(key).uid
+
+    env.mirror.put(key, t2=start)  # re-opened: t1 == t2
+    report = fsync(env)
+    assert report.errors == []
+    assert not env.mirror.record(key)["ds"].startswith("HIDDEN")
+    assert events(env)[uid].end == start + 600  # left alone while running
+
+    env.mirror.put(key, t2=start + 1200)
+    report = fsync(env)
+    assert report.updated_events == 1
+    assert events(env)[uid].end == start + 1200
+
+
+def test_restore_adopts_an_event_that_already_has_the_uid(env):
+    start = now() - 3600
+    key = env.mirror.add_record(start, start + 600, "recover me #a")
+    fsync(env)
+    uid = env.mirror.store.pair_for_record(key).uid
+
+    env.mirror.hide(key)
+    fsync(env)  # event removed, pair becomes a tombstone
+    assert events(env) == {}
+
+    env.mirror.unhide(key)
+    env.mirror.cal.create_event(uid, start, start + 900, "stale copy")
+    report = fsync(env)
+
+    assert report.errors == []
+    assert report.restored_records == 1
+    assert events(env)[uid].summary == "recover me #a"
+    assert events(env)[uid].end == start + 600
 
 
 def test_record_edit_updates_event(env):
@@ -198,15 +279,22 @@ def test_bad_events_are_skipped_and_reported(env):
         "DTSTART:20231114T220000Z\r\nDTEND:20231114T230000Z\r\n"
         "RRULE:FREQ=WEEKLY\r\nSUMMARY:weekly\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
     )
+    untitled = (
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//test//EN\r\nBEGIN:VEVENT\r\n"
+        "UID:ttcal-untitled\r\nDTSTAMP:20231114T220000Z\r\n"
+        "DTSTART:20231114T220000Z\r\nDTEND:20231114T230000Z\r\n"
+        "END:VEVENT\r\nEND:VCALENDAR\r\n"
+    )
     calendar.save_event(all_day)
     calendar.save_event(recurring)
+    calendar.save_event(untitled)
     cal.create_event("ttcal-hidden-title", base, base + 600, "HIDDEN oops")
 
     report = fsync(env)
     assert report.created_records == 0
-    assert report.skipped == 3
+    assert report.skipped == 4
     reasons = {row["reason"] for row in env.mirror.store.list_skips()}
-    assert reasons == {"all-day", "recurring", "hidden-prefix"}
+    assert reasons == {"all-day", "recurring", "empty-summary", "hidden-prefix"}
 
 
 def test_long_summary_is_truncated(env):
@@ -296,6 +384,12 @@ def test_mass_event_deletion_is_refused(env):
     # Nothing was hidden behind our back.
     visible = {record["key"] for record in env.mirror.visible_records()}
     assert set(keys) <= visible
+
+    # The explicit override performs the deletion the owner asked for.
+    report = env.mirror.sync(allow_mass_deletion=True)
+    assert report.errors == []
+    visible = {record["key"] for record in env.mirror.visible_records()}
+    assert not (set(keys) & visible)
 
 
 def test_missing_calendar_with_existing_pairs_is_refused(env):

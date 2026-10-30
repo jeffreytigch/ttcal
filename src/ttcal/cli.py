@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import argparse
 import logging
+import signal
 import sys
+import threading
 import time
+from dataclasses import replace
 from pathlib import Path
 
 from . import __version__, model
@@ -53,6 +56,8 @@ def _config(args: argparse.Namespace) -> Config:
 # -- commands ------------------------------------------------------------
 def cmd_sync(args: argparse.Namespace, once: bool = True) -> int:
     config = _config(args).with_dry_run(bool(getattr(args, "dry_run", False)))
+    if getattr(args, "allow_mass_deletion", False):
+        config = replace(config, allow_mass_deletion=True)
     _setup_logging("DEBUG" if args.verbose else config.log_level)
     store, tt, cal = _open(config)
     try:
@@ -71,6 +76,8 @@ def cmd_sync(args: argparse.Namespace, once: bool = True) -> int:
 
 def cmd_run(args: argparse.Namespace) -> int:
     config = _config(args)
+    if getattr(args, "allow_mass_deletion", False):
+        config = replace(config, allow_mass_deletion=True)
     _setup_logging("DEBUG" if args.verbose else config.log_level)
     store, tt, cal = _open(config)
     syncer = Syncer(config, store, tt, cal)
@@ -82,32 +89,46 @@ def cmd_run(args: argparse.Namespace) -> int:
         config.calendar_name,
         config.poll_interval,
     )
+    stop = threading.Event()
+
+    def _stop(signum: int, frame: object) -> None:
+        log.info("received signal %s, stopping after this pass", signum)
+        stop.set()
+
+    signal.signal(signal.SIGTERM, _stop)
+    signal.signal(signal.SIGINT, _stop)
     try:
-        while True:
+        while not stop.is_set():
             started = time.time()
+            failed = False
             try:
                 report = syncer.sync_once()
                 if report.actions or report.errors:
                     log.info("%s", report.summary())
                 for error in report.errors:
                     log.error("%s", error)
-                if not report.errors:
+                failed = bool(report.errors)
+                if not failed:
                     store.set_cursor(LAST_SYNC, str(int(time.time())))
             except SyncError as err:
+                failed = True
                 log.error("%s", err)
             except (TimeTaggerError, CalendarError) as err:
+                failed = True
                 log.error("%s", err)
             except Exception:  # keep the daemon alive
+                failed = True
                 log.exception("unexpected error during sync")
             if args.once:
-                return 0
+                return 1 if failed else 0
             elapsed = time.time() - started
-            time.sleep(max(1.0, config.poll_interval - elapsed))
-    except KeyboardInterrupt:
+            stop.wait(max(1.0, config.poll_interval - elapsed))
+    except KeyboardInterrupt:  # pragma: no cover - signal handler normally wins
         log.info("stopped")
-        return 0
     finally:
         store.close()
+    log.info("stopped")
+    return 0
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -273,11 +294,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="run the mirror loop")
     run.add_argument("--once", action="store_true", help="run a single pass and exit")
+    run.add_argument(
+        "--allow-mass-deletion",
+        action="store_true",
+        help="hide records when most mirrored events vanished at once",
+    )
     run.set_defaults(func=cmd_run)
 
     sync = sub.add_parser("sync", help="run one sync pass")
     sync.add_argument(
         "--dry-run", action="store_true", help="read both sides, write nothing"
+    )
+    sync.add_argument(
+        "--allow-mass-deletion",
+        action="store_true",
+        help="hide records when most mirrored events vanished at once",
     )
     sync.set_defaults(func=cmd_sync)
 

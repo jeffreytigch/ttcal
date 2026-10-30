@@ -88,6 +88,7 @@ changes.
 |---------|--------------|
 | `ttcal run [--once]` | Poll forever (default 60 s), or run one pass and exit. |
 | `ttcal sync [--dry-run]` | One pass. `--dry-run` reads both sides and writes nothing. |
+| `--allow-mass-deletion` | Safety override for `run`/`sync`: allow hiding records when most mirrored events vanished at once. |
 | `ttcal status` | Pair counts, last sync, cursors, recent conflicts, skipped events. |
 | `ttcal doctor` | Validate config, state database, TimeTagger and CalDAV connectivity. |
 | `ttcal repair --rebuild` | Rebuild pairing state by matching `(start, stop, description)` on both sides. |
@@ -152,7 +153,7 @@ These follow from the 1:1 design and are documented rather than fixed:
 ```bash
 make dev-up      # TimeTagger on :1081, Radicale on :5232 (test:test)
 uv sync --extra dev
-uv run pytest -q             # 51 unit tests + 16 Docker integration tests
+uv run pytest -q             # 55 unit tests + 21 Docker integration tests
 uv run pytest -q -m "not docker"
 make dev-down
 ```

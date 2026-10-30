@@ -78,6 +78,8 @@ uses the same convention in both directions:
 Because the pair (record key ↔ UID) is kept in the state database, a restore
 does not create a duplicate. Deleting a whole calendar is refused: it would
 look like a mass deletion, and ttcal cannot tell that apart from an accident.
+If you really do want to delete many events at once, stop the service and run
+`ttcal sync --allow-mass-deletion` once, then start it again.
 
 If hidden records clutter TimeTagger, filter them out or remove them
 permanently in TimeTagger after you are sure you will not restore them. Once a
@@ -98,7 +100,9 @@ Some events cannot be represented as a record:
 | `all-day` | A record has instants, not a date. |
 | `recurring` | Recurrence is not expanded (see below). |
 | `no-uid` | Without a UID there is no stable identity to pair. |
+| `empty-summary` | The event has no title, so there is nothing to record. |
 | `hidden-prefix` | The title starts with `HIDDEN` and would collide with TimeTagger's deletion marker. |
+| `invalid-ical`, `multi-event`, `no-dtstart` | The payload is not exactly one timed event with a start. |
 
 Skipped events are never modified and are listed by `ttcal status`, with the
 href and reason. Fix the event (give it a time, remove the recurrence, give it a
@@ -139,6 +143,7 @@ interval (60 s by default).
 ttcal status          # pairs, last sync, conflicts, skipped events
 ttcal sync            # force a pass now instead of waiting for the poll
 ttcal sync --dry-run  # show what the next pass would do; writes nothing
+ttcal sync --allow-mass-deletion  # confirm a deliberate mass deletion
 ttcal doctor          # connectivity and config check after a change
 ```
 

@@ -251,8 +251,11 @@ class Syncer:
     def _read_timetagger(self, now: float) -> tuple[list[dict[str, Any]], float]:
         since = self.store.get_cursor(CURSOR_TT)
         if since is None:
-            records = self._initial_records(now)
+            # Read the cursor *before* the snapshot: a record written between
+            # the two calls then has st >= server_time and is picked up by the
+            # next incremental read instead of being missed forever.
             updates = self.tt.updates(now)
+            records = self._initial_records(now)
             return records, updates.server_time
         try:
             updates = self.tt.updates(float(since))
@@ -278,7 +281,9 @@ class Syncer:
 
     def _initial_records(self, now: float) -> list[dict[str, Any]]:
         start = int(now - self.config.backfill_days * 86400)
-        end = int(now + 86400)
+        # Records may be dated in the future; one day would hide anything
+        # further ahead from the only full read this bridge ever does.
+        end = int(now + 3650 * 86400)
         try:
             return self.tt.records(start, end)
         except TimeTaggerError as err:
@@ -300,10 +305,18 @@ class Syncer:
     def _guard_mass_deletion(self, deleted: set[str], pairs: list[Pair]) -> None:
         active = [p for p in pairs if p.state == STATE_ACTIVE and p.href]
         if len(active) >= 4 and len(deleted) > max(3, len(active) // 2):
+            if self.config.allow_mass_deletion:
+                log.warning(
+                    "%d of %d mirrored events vanished; hiding the records because "
+                    "--allow-mass-deletion was given",
+                    len(deleted),
+                    len(active),
+                )
+                return
             raise SyncError(
                 f"{len(deleted)} of {len(active)} mirrored events vanished at once; "
-                f"refusing to hide records. Check the calendar, then run "
-                f"'ttcal repair' if this is intentional."
+                f"refusing to hide records. Check the calendar, then re-run with "
+                f"--allow-mass-deletion if this is intentional."
             )
 
     # -- actions ---------------------------------------------------------
@@ -311,12 +324,12 @@ class Syncer:
         if record.hidden or record.running:
             report.unchanged += 1
             return
-        start, end, summary = model.record_to_event(record, model.new_uid())
+        uid = model.new_uid()
+        start, end, summary = model.record_to_event(record, uid)
         if self.config.dry_run:
             report.created_events += 1
             report.note(f"would create event for record {record.key} ({summary!r})")
             return
-        uid = model.new_uid()
         event = self.cal.create_event(uid, start, end, summary)
         self._save_active(record, event)
         report.created_events += 1
@@ -432,7 +445,18 @@ class Syncer:
             self._hide_from_record(pair, record, report)
             return
         if record.running:
-            self._event_deleted(pair, report)
+            # The record was re-opened as a timer. It has no end yet, so keep
+            # the existing event untouched; the next stop changes the hash and
+            # pushes the final times. Never hide the record for this.
+            report.unchanged += 1
+            if not self.config.dry_run:
+                self.store.save_pair(
+                    replace(
+                        pair,
+                        record_hash=model.record_hash_of(record),
+                        updated_at=int(self.clock()),
+                    )
+                )
             return
 
         start, end, summary = model.record_to_event(record, pair.uid)
@@ -484,6 +508,16 @@ class Syncer:
             report.errors.append(str(err))
             log.error("%s", err)
             return
+        if model.record_hash_of(actual) != model.record_hash_of(record):
+            # TimeTagger kept a newer edit (its mt was greater). Leave both
+            # baselines untouched so the next pass resolves the real conflict.
+            message = (
+                f"record {record.key} changed in TimeTagger while the event was "
+                f"being applied; deferring to the next pass"
+            )
+            report.errors.append(message)
+            log.warning("%s", message)
+            return
         self._save_active(actual, event)
         self.store.remove_skip(event.href)
         report.updated_records += 1
@@ -527,11 +561,13 @@ class Syncer:
     def _event_deleted(self, pair: Pair, report: SyncReport) -> None:
         t1, t2, ds = self._meta_record(pair)
         if not ds:
-            t1, t2 = (
-                int(self.clock()) - 3600,
-                int(self.clock()) - 3600 + model.MIN_DURATION,
+            message = (
+                f"pair {pair.record_key} has no stored baseline; run "
+                f"'ttcal repair --rebuild' before deleting its event"
             )
-            ds = "restored"
+            report.errors.append(message)
+            log.error("%s", message)
+            return
         hidden = RecordFields(
             key=pair.record_key,
             t1=t1,
@@ -574,7 +610,15 @@ class Syncer:
             report.note(f"would recreate event {pair.uid} from record {record.key}")
             return
         try:
-            event = self.cal.create_event(pair.uid, start, end, summary)
+            existing = self.cal.get_event(pair.uid)
+            if existing is None:
+                event = self.cal.create_event(pair.uid, start, end, summary)
+            else:
+                # A previous restore may have written the event but failed
+                # before saving the pair. Adopt it instead of hitting the
+                # server's duplicate-UID rejection forever.
+                log.info("adopting existing event %s during restore", existing.href)
+                event = self.cal.update_event(pair.uid, start, end, summary)
         except CalendarError as err:
             report.errors.append(str(err))
             log.error("%s", err)

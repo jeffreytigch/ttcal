@@ -34,6 +34,8 @@ class TimeTaggerClient:
     ) -> None:
         self.api_url = api_url.rstrip("/")
         self.timeout = timeout
+        self._username = username
+        self._password = password
         self.session = requests.Session()
         self.session.headers["User-Agent"] = "ttcal"
         if token:
@@ -46,7 +48,9 @@ class TimeTaggerClient:
     def _url(self, path: str) -> str:
         return f"{self.api_url}/{path.lstrip('/')}"
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+    def _request(
+        self, method: str, path: str, _retry: bool = True, **kwargs: Any
+    ) -> Any:
         try:
             response = self.session.request(
                 method, self._url(path), timeout=self.timeout, **kwargs
@@ -55,6 +59,13 @@ class TimeTaggerClient:
             raise TimeTaggerError(
                 f"cannot reach TimeTagger at {self.api_url}: {err}"
             ) from None
+        if response.status_code == 401 and _retry and self._username and self._password:
+            # A long-running service may outlive its token. Log in again and
+            # retry once, so credentials keep working without a restart.
+            self.session.headers["authtoken"] = self._bootstrap(
+                self._username, self._password
+            )
+            return self._request(method, path, _retry=False, **kwargs)
         if response.status_code == 401:
             raise TimeTaggerError(
                 "TimeTagger rejected the token (401); "

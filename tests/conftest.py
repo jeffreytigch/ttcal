@@ -15,7 +15,7 @@ from __future__ import annotations
 import os
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -74,6 +74,36 @@ def pytest_collection_modifyitems(
             item.add_marker(skip)
 
 
+def _hide_visible_records(tt: TimeTaggerClient) -> None:
+    """Hide every record, so tests cannot see each other's leftovers.
+
+    The window is deliberately wide in both directions: records dated in the
+    future are normal for this bridge and must not leak into the next test.
+    """
+    now = int(time.time())
+    stale = [
+        record
+        for record in tt.records(now - 3650 * 86400, now + 3650 * 86400)
+        if not is_hidden(str(record["ds"]))
+    ]
+    if not stale:
+        return
+    # A stored mt in the future would make TimeTagger ignore the update, so
+    # always move mt forward by at least one second.
+    tt.put_records(
+        [
+            {
+                "key": record["key"],
+                "t1": int(record["t1"]),
+                "t2": int(record["t2"]),
+                "ds": hide_ds(str(record["ds"])),
+                "mt": int(max(now, record["mt"]) + 1),
+            }
+            for record in stale
+        ]
+    )
+
+
 class Mirror:
     """A configured bridge bound to a fresh calendar and state database."""
 
@@ -85,8 +115,10 @@ class Mirror:
         self.tt = tt
         self.cal = cal
 
-    def sync(self, dry_run: bool = False):
+    def sync(self, dry_run: bool = False, allow_mass_deletion: bool = False):
         config = self.config.with_dry_run(dry_run)
+        if allow_mass_deletion:
+            config = replace(config, allow_mass_deletion=True)
         syncer = Syncer(config, self.store, self.tt, self.cal)
         return syncer.sync_once()
 
@@ -201,30 +233,11 @@ def env(tmp_path: Path) -> Env:
 
     # Start every test from a clean slate: hide anything still visible from
     # earlier runs. Hidden records are ignored by the bridge.
-    now = int(time.time())
-    stale = [
-        record
-        for record in tt.records(now - 3650 * 86400, now + 86400)
-        if not is_hidden(str(record["ds"]))
-    ]
-    if stale:
-        # A stored mt in the future would make TimeTagger ignore the update,
-        # so always move mt forward by at least one second.
-        tt.put_records(
-            [
-                {
-                    "key": r["key"],
-                    "t1": int(r["t1"]),
-                    "t2": int(r["t2"]),
-                    "ds": hide_ds(str(r["ds"])),
-                    "mt": int(max(now, r["mt"]) + 1),
-                }
-                for r in stale
-            ]
-        )
+    _hide_visible_records(tt)
 
     yield Env(mirror=mirror, calendar_name=calendar_name)
 
+    _hide_visible_records(tt)
     store.close()
     try:
         calendar = cal.open_calendar()

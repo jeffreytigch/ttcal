@@ -102,10 +102,28 @@ database casually: tombstones live there.
 ### `N of M mirrored events vanished at once; refusing to hide records`
 
 More than `max(3, M/2)` paired events disappeared in one pass. This protects
-against a broad accidental deletion (or a calendar that was replaced). Check the
-calendar. If the deletion was intentional, delete the events in smaller batches,
-or stop the service, remove the affected pairs with `ttcal repair --rebuild`
-after restoring, and restart. Always inspect `ttcal status` afterwards.
+against a broad accidental deletion (or a calendar that was replaced). Nothing
+was written: the records are still visible in TimeTagger.
+
+Check the calendar first. If the calendar was recreated or temporarily empty,
+fix that and let the next pass run; the guard clears by itself once the events
+are back. If the deletion was intentional, re-run the pass with the override:
+
+```sh
+ttcal sync --allow-mass-deletion
+```
+
+For the service, stop it, run the command above once, then start it again:
+
+```sh
+supervisorctl stop ttcal
+ttcal sync --allow-mass-deletion
+supervisorctl start ttcal
+```
+
+`ttcal run` accepts the same flag, so a supervised process can carry it
+permanently if mass deletion is part of normal operation. Use it deliberately:
+it hides every affected record. Always inspect `ttcal status` afterwards.
 
 ### `cannot create event …: 409 … no-uid-conflict`
 

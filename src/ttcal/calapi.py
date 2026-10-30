@@ -176,6 +176,12 @@ class CalendarClient:
     # -- reads -----------------------------------------------------------
     def changes(self, sync_token: str | None) -> CalChanges:
         calendar = self.open_calendar()
+        # ``caldav`` emulates sync tokens with a "fake-" token when the server
+        # has no sync-collection support.  Its emulation returns an empty list
+        # when nothing changed, which is indistinguishable from an empty
+        # calendar, so re-read everything instead of trusting it.
+        if sync_token and sync_token.startswith("fake-"):
+            sync_token = None
         try:
             collection = calendar.get_objects_by_sync_token(
                 sync_token=sync_token, load_objects=True
@@ -205,6 +211,8 @@ class CalendarClient:
         deleted = {_href(url) for url in (collection.deleted_urls or set())}
         token = getattr(collection, "sync_token", None)
         token = None if token is None else str(token)
+        if token and token.startswith("fake-"):
+            token = None
         return CalChanges(
             events=events,
             deleted_hrefs=deleted,

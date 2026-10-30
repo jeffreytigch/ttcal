@@ -42,6 +42,7 @@ class Config:
     poll_interval: int = DEFAULT_POLL_INTERVAL
     log_level: str = DEFAULT_LOG_LEVEL
     dry_run: bool = False
+    allow_mass_deletion: bool = False
 
     def with_dry_run(self, dry_run: bool) -> Config:
         return replace(self, dry_run=dry_run)

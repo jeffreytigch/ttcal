@@ -44,6 +44,11 @@ class SummaryTests(unittest.TestCase):
     def test_newlines_collapse_to_spaces(self):
         self.assertEqual(model.normalize_summary("a\r\nb\nc\td"), "a b c d")
 
+    def test_empty_summary_is_refused(self):
+        with self.assertRaises(model.UnsupportedEvent) as ctx:
+            model.record_ds_from_summary("   ")
+        self.assertEqual(ctx.exception.reason, "empty-summary")
+
     def test_hidden_prefix_is_refused(self):
         with self.assertRaises(model.UnsupportedEvent) as ctx:
             model.record_ds_from_summary("HIDDEN oops")
