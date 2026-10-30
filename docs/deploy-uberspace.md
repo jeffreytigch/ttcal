@@ -24,6 +24,21 @@ Adapt paths, user names and host names. The generic instructions are in
 - `htpasswd` (present on Uberspace) to create the CalDAV password file.
 - `supervisorctl` (present on Uberspace).
 
+Some Uberspace interpreters ship without `ensurepip`, so `python3.14 -m venv`
+creates a virtualenv that has no `pip`. Check before installing:
+
+```bash
+ls ~/radicale-venv/bin/pip
+```
+
+If the file is missing, bootstrap pip into the venv (or install `uv` and use
+`uv pip install` instead):
+
+```bash
+curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+~/radicale-venv/bin/python /tmp/get-pip.py
+```
+
 The account already runs other services; all commands below stay inside the
 home directory and use unprivileged ports. Nothing needs root.
 
@@ -32,6 +47,7 @@ home directory and use unprivileged ports. Nothing needs root.
 ```bash
 # a virtualenv for Radicale
 python3.14 -m venv ~/radicale-venv
+ls ~/radicale-venv/bin/pip || echo "no pip: see the bootstrap note above"
 ~/radicale-venv/bin/pip install --upgrade pip
 ~/radicale-venv/bin/pip install --upgrade radicale bcrypt
 

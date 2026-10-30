@@ -39,6 +39,24 @@ exchanged for a JWT at startup and refreshed only by restarting the process.
 Sub-five-second polling adds load without making clients refresh faster; Apple
 Calendar refreshes on its own schedule anyway.
 
+## `python -m venv` created a virtualenv without `pip`
+
+`~/radicale-venv/bin/pip: No such file or directory` after creating a venv
+means the interpreter was built without `ensurepip` (common for the extra
+Python versions on shared hosts). The venv itself is fine; only pip is
+missing. Bootstrap it:
+
+```bash
+curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+~/radicale-venv/bin/python /tmp/get-pip.py
+~/radicale-venv/bin/pip --version
+```
+
+Alternatively install `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+and use `uv pip install --python ~/radicale-venv/bin/python radicale bcrypt`.
+Do not run `pip install` outside the venv: shared hosts usually have an
+externally managed system Python.
+
 ## TimeTagger
 
 ### `cannot reach TimeTagger at …: …`

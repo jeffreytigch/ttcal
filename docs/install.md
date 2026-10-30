@@ -98,6 +98,8 @@ Install Radicale where it can keep state (the tested version is 3.x):
 
 ```bash
 python3 -m venv ~/radicale-venv
+# If this reports "No such file or directory", the interpreter has no
+# ensurepip; bootstrap it with https://bootstrap.pypa.io/get-pip.py.
 ~/radicale-venv/bin/pip install radicale bcrypt
 mkdir -p ~/.config/radicale ~/radicale-data/collections
 htpasswd -nbB calendar 'choose-a-password' > ~/.config/radicale/users
